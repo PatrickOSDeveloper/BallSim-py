@@ -1,6 +1,7 @@
 try:
     import pygame as pg
     import sys
+    import math
     from pygame.locals import *
     from typing import Dict, Any, Optional, List
 except ImportError as err:
@@ -17,6 +18,10 @@ GRID_SPACING = 50
 GRID_COLOR = (173, 216, 230)
 GRID_DASH_LENGTH = 5
 GRID_GAP_LENGTH = 5
+
+PATH_COLOR = (255, 255, 0)
+PATH_LINE_WIDTH = 2
+PATH_ARROW_SIZE = 10
 
 class BallPath:
     """Holds the animation path data for a Ball object."""
@@ -55,6 +60,11 @@ class Ball:
         else:
             return pg.Color(DEFAULT_BALL_COLOR)
         
+    def is_colliding_with_point(self, point: tuple[int, int]) -> bool:
+        """Checks if a 2D point is inside this Ball."""
+        distance = self.position.distance_to(point)
+        return distance <= self.radius
+
 class Scene:
     """Holds all data for the current scene."""
     def __init__(self,
@@ -80,8 +90,17 @@ class Scene:
             return pg.Color(DEFAULT_BG_COLOR)
         
     def add_ball(self, ball: Ball):
-        """Adds a ball to the scene."""
+        """Adds a ball to the scene. Ensures that new Balls are placed in a unique layer."""
+        max_layer = -1
+        if self.balls:
+            max_layer = max(b.layer for b in self.balls)
+        ball.layer = max_layer + 1
         self.balls.append(ball)
+
+    def remove_ball(self, ball: Ball):
+        """Removes a ball from the scene."""
+        if ball in self.balls:
+            self.balls.remove(ball)
 
 class BallSimApp:
     """Manages the main game loop and application state."""
@@ -96,6 +115,11 @@ class BallSimApp:
 
         self.clock = pg.time.Clock()
         self.running = True
+
+        # Are we currently *SHIFT + drag*'ing on a Ball
+        # to create a child BallPath?
+        self.is_dragging_path = False
+        self.drag_ball: Optional[Ball] = None
     
     def run(self):
         """Main application loop."""
@@ -108,22 +132,66 @@ class BallSimApp:
         pg.quit()
         sys.exit()
     
+    def get_ball_at_pos(self, pos: tuple[int, int]) -> Optional[Ball]:
+        """Finds the top-most ball at a given screen position."""
+        # Iterate in reverse to find the ball of the highest layer
+        for ball in reversed(self.scene.balls):
+            if ball.is_colliding_with_point(pos):
+                return ball
+        return None
+
     def handle_events(self):
         """Process user input at every time step."""
         for event in pg.event.get():
             if event.type == QUIT:
                 self.running = False
 
-            if event.type == MOUSEBUTTONDOWN:
-                # 1 = Left-click
-                if event.button == 1:
-                    mouse_pos = pg.mouse.get_pos()
-                    snapped_pos = self.snap_to_grid(mouse_pos)
+            elif event.type == MOUSEBUTTONDOWN:
+                if event.button == 1: # 1 = Left-click
+                    keys = pg.ley.get_pressed()
+                    mouse_pos = event.pos
+                    clicked_ball = self.get_ball_at_pos(mouse_pos)
 
-                    new_ball = Ball(position=pg.math.Vector2(snapped_pos))
+                    is_shift = keys[K_LSHIFT] or keys[K_RSHIFT]
+                    is_del = keys[K_DELETE] or keys[K_BACKSPACE]
 
-                    self.scene.add_ball(new_ball)
-        
+                    if clicked_ball:
+                        if is_shift:
+                            self.is_dragging_path = True
+                            self.drag_ball = clicked_ball
+                        elif is_del:
+                            self.scene.remove_ball(clicked_ball)
+                        else:
+                            # Clicked on a ball without a modifier key, do nothing
+                            pass
+                    else:
+                        # Clicked on empty space
+                        if not is_shift and not is_del:
+                            snapped_pos = self.snap_to_grid(mouse_pos)
+                            new_ball = Ball(position=pg.math.Vector2(snapped_pos))
+                            self.scene.add_ball(new_ball)
+            
+            # Handle mouse release to finish creation of a child BallPath
+            elif event.type == MOUSEBUTTONUP:
+                if event.button == 1 # 1 = Left-click
+                    if self.is_dragging_path and self.drag_ball:
+                        end_pos_snapped = self.snap_to_grid(event.pos)
+                        start_pos = self.drag_ball.position
+
+                        if start_pos.distance_to(end_pos_snapped) == 0:
+                            # Destroy existing child BallPath
+                            self.drag_ball.path = None
+                        else:
+                            # Create new child BallPath or update current one
+                            new_path = BallPath(
+                                start_pos=start_pos,
+                                end_pos=pg.math.Vector2(end_pos_snapped)
+                            )
+                            self.drag_ball.path = new_path
+                # Reset dragging state
+                            self.is_dragging_path = False
+                            self.drag_ball = None
+
         # TODO: Add support for other user events.
     
     def update(self):
@@ -145,8 +213,33 @@ class BallSimApp:
                 ball.position,
                 ball.radius
             )
+            if ball.path:
+                self.draw_ball_path(ball.path.start_pos, ball.path.end_pos, PATH_COLOR)
+        
+        if self.is_dragging_path and self.drag_ball:
+            mouse_pos = pg.mouse.get_pos()
+            snapped_end = self.snap_to_grid(mouse_pos)
+            self.draw_ball_path(self.drag_ball.position, snapped_end, PATH_COLOR)
         
         pg.display.flip()
+    
+    def draw_ball_path(self, start_pos: pg.math.Vector2, end_pos: pg.math.Vector2, color: pg.Color):
+        """Draws a vector onto the canvas, representing a BallPath."""
+
+        pg.draw.line(self.screen, color, start_pos, end_pos, PATH_LINE_WIDTH)
+
+        # Try to draw a cute arrowhead for our vector
+        try:
+            # Get unit vector for BallPath direction
+            direction = (end_pos - start_pos).normalize()
+
+            p1 = end_pos - direction * PATH_ARROW_SIZE + direction.rotate(90) * (PATH_ARROW_SIZE / 2)
+            p2 = end_pos - direction * PATH_ARROW_SIZE + direction.rotate(-90) * (PATH_ARROW_SIZE / 2)
+
+            pg.draw.polygon(self.screen, color, [end_pos, p1, p2])
+        except ValueError:
+            # If start_pos == end_pos then direction would attempt to normalize the zero vector
+            pass # Don't draw arrowhead shape if we have a line of zero length
     
     def draw_grid(self):
         """Draws the grid over the canvas in the scene editor window."""
