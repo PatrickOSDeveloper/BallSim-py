@@ -16,21 +16,22 @@ class AppState(Enum):
     STATE_SCENE_EDITOR = auto()
     # TODO: Add further states
 
+# Scene Editor constants
 DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
 DEFAULT_BG_COLOR = (34, 34, 34)
 DEFAULT_BALL_RADIUS = 24
 DEFAULT_BALL_COLOR = (255, 0, 0)
-
+# Scene Editor grid constants
 GRID_SPACING = 50
 GRID_COLOR = (173, 216, 230)
 GRID_DASH_LENGTH = 5
 GRID_GAP_LENGTH = 5
-
+# Scene Editor vector constants
 PATH_COLOR = (255, 255, 0)
 PATH_LINE_WIDTH = 2
 PATH_ARROW_SIZE = 10
-
+# Support Menu GUI constants
 MENU_WIDTH = 400
 MENU_HEIGHT = 300
 MENU_BG_COLOR = (50, 50, 50)
@@ -214,60 +215,101 @@ class BallSimApp:
         sys.exit()
 
     def handle_events(self):
-        """Process user input at every time step."""
+        """Process user input based on the current app state."""
         for event in pg.event.get():
             if event.type == QUIT:
                 self.running = False
+                return
 
-            elif event.type == MOUSEBUTTONDOWN:
-                if event.button == 1: # 1 = Left-click
-                    keys = pg.key.get_pressed()
-                    mouse_pos = event.pos
-                    clicked_ball = self.get_ball_at_pos(mouse_pos)
+            if self.app_state == AppState.STATE_SUPPORT_MENU:
+                self.handle_events_menu(event)
+            elif self.app_state == AppState.STATE_SCENE_EDITOR:
+                self.handle_events_editor(event)
+    
+    def update(self):
+        """Update game state based on the current app state."""
+        if self.app_state == AppState.STATE_SUPPORT_MENU:
+            self.update_menu()
+        elif self.app_state == AppState.STATE_SCENE_EDITOR:
+            self.update_editor()
+    
+    def draw(self):
+        """Draw everything to the screen based on the current app state."""
+        if self.app_state == AppState.STATE_SUPPORT_MENU:
+            self.draw_menu()
+        elif self.app_state == AppState.STATE_SCENE_EDITOR:
+            self.draw_editor()
+        
+        pg.display.flip()
 
-                    is_shift = keys[K_LSHIFT] or keys[K_RSHIFT]
-                    is_del = keys[K_DELETE] or keys[K_BACKSPACE]
+    def handle_events_menu(self, event):
+        """Process input for the support menu."""
+        for button in self.menu_buttons:
+            button.handle_event(event)
 
-                    if clicked_ball:
-                        if is_shift:
-                            self.is_dragging_path = True
-                            self.drag_ball = clicked_ball
-                        elif is_del:
-                            self.scene.remove_ball(clicked_ball)
+    def update_menu(self):
+        """Update logic for the support menu."""
+        # TODO: Update when we have logic
+        pass
+
+    def draw_menu(self):
+        """Draws the support menu GUI."""
+        self.screen.fill(MENU_BG_COLOR)
+        for button in self.menu_buttons:
+            button.draw(self.screen)
+
+    def handle_events_editor(self, event):
+        """Process user input at every time step."""
+        if event.type == MOUSEBUTTONDOWN:
+            if event.button == 1: # 1 = Left-click
+                keys = pg.key.get_pressed()
+                mouse_pos = event.pos
+                clicked_ball = self.get_ball_at_pos(mouse_pos)
+
+                is_shift = keys[K_LSHIFT] or keys[K_RSHIFT]
+                is_del = keys[K_DELETE] or keys[K_BACKSPACE]
+
+                if clicked_ball:
+                    if is_shift:
+                        self.is_dragging_path = True
+                        self.drag_ball = clicked_ball
+                    elif is_del:
+                        self.scene.remove_ball(clicked_ball)
+                else:
+                    # Clicked on empty space
+                    if not is_shift and not is_del:
+                        snapped_pos = self.snap_to_grid(mouse_pos)
+                        new_ball = Ball(position=pg.math.Vector2(snapped_pos))
+                        self.scene.add_ball(new_ball)
+        
+        # Handle mouse release to finish creation of a child BallPath
+        elif event.type == MOUSEBUTTONUP:
+            if event.button == 1: # 1 = Left-click
+                if self.is_dragging_path and self.drag_ball:
+                    end_pos_snapped = self.snap_to_grid(event.pos)
+                    start_pos = self.drag_ball.position
+
+                    if start_pos.distance_to(end_pos_snapped) == 0:
+                        # Destroy existing child BallPath
+                        self.drag_ball.path = None
                     else:
-                        # Clicked on empty space
-                        if not is_shift and not is_del:
-                            snapped_pos = self.snap_to_grid(mouse_pos)
-                            new_ball = Ball(position=pg.math.Vector2(snapped_pos))
-                            self.scene.add_ball(new_ball)
-            
-            # Handle mouse release to finish creation of a child BallPath
-            elif event.type == MOUSEBUTTONUP:
-                if event.button == 1: # 1 = Left-click
-                    if self.is_dragging_path and self.drag_ball:
-                        end_pos_snapped = self.snap_to_grid(event.pos)
-                        start_pos = self.drag_ball.position
+                        # Create new child BallPath or update current one
+                        new_path = BallPath(
+                            start_pos=start_pos,
+                            end_pos=pg.math.Vector2(end_pos_snapped)
+                        )
+                        self.drag_ball.path = new_path
+            # Reset dragging state
+                    self.is_dragging_path = False
+                    self.drag_ball = None
 
-                        if start_pos.distance_to(end_pos_snapped) == 0:
-                            # Destroy existing child BallPath
-                            self.drag_ball.path = None
-                        else:
-                            # Create new child BallPath or update current one
-                            new_path = BallPath(
-                                start_pos=start_pos,
-                                end_pos=pg.math.Vector2(end_pos_snapped)
-                            )
-                            self.drag_ball.path = new_path
-                # Reset dragging state
-                        self.is_dragging_path = False
-                        self.drag_ball = None
-            elif event.type == KEYDOWN:
-                if event.key == K_ESCAPE:
-                    print("Escape pressed. Returning to support menu.")
-                    # TODO: Add AUTOSAVE logic here later
-                    self.got_to_support_menu()
+        elif event.type == KEYDOWN:
+            if event.key == K_ESCAPE:
+                print("Escape pressed. Returning to support menu.")
+                # TODO: Add AUTOSAVE logic here later
+                self.go_to_support_menu()
 
-        # TODO: Add support for other user events.
+    # TODO: Add support for other user events.
     
     def update_editor(self):
         """Update logic for the scene editor."""
@@ -276,7 +318,6 @@ class BallSimApp:
     def draw_editor(self):
         """Draws the scene editor window."""
         self.screen.fill(self.scene.get_render_bg_color())
-
         self.draw_grid()
 
         sorted_balls = sorted(self.scene.balls, key=lambda b: b.layer)
@@ -295,8 +336,6 @@ class BallSimApp:
             mouse_pos = pg.mouse.get_pos()
             snapped_end = self.snap_to_grid(mouse_pos)
             self.draw_ball_path(self.drag_ball.position, snapped_end, PATH_COLOR)
-        
-        pg.display.flip()
     
     def get_ball_at_pos(self, pos: tuple[int, int]) -> Optional[Ball]:
         """Finds the top-most ball at a given screen position."""
@@ -308,17 +347,12 @@ class BallSimApp:
 
     def draw_ball_path(self, start_pos: pg.math.Vector2, end_pos: pg.math.Vector2, color: pg.Color):
         """Draws a vector onto the canvas, representing a BallPath."""
-
         pg.draw.line(self.screen, color, start_pos, end_pos, PATH_LINE_WIDTH)
-
-        # Try to draw a cute arrowhead for our vector
         try:
             # Get unit vector for BallPath direction
             direction = (end_pos - start_pos).normalize()
-
             p1 = end_pos - direction * PATH_ARROW_SIZE + direction.rotate(90) * (PATH_ARROW_SIZE / 2)
             p2 = end_pos - direction * PATH_ARROW_SIZE + direction.rotate(-90) * (PATH_ARROW_SIZE / 2)
-
             pg.draw.polygon(self.screen, color, [end_pos, p1, p2])
         except ValueError:
             # If start_pos == end_pos then direction would attempt to normalize the zero vector
@@ -326,7 +360,6 @@ class BallSimApp:
     
     def draw_grid(self):
         """Draws the grid over the canvas in the scene editor window."""
-
         for x in range(0, self.scene.width, GRID_SPACING):
             for y in range(0, self.scene.height, GRID_DASH_LENGTH + GRID_GAP_LENGTH):
                 start_pos = (x, y)

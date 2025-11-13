@@ -21,7 +21,7 @@ class Button:
 
     def handle_event(self, event: pg.event.Event):
         """Checks for clicks and hover state."""
-        if event.tpe == pg.MOUSEMOTION:
+        if event.type == pg.MOUSEMOTION:
             self.is_hovered = self.rect.collidepoint(event.pos)
         elif event.type == pg.MOUSEBUTTONDOWN:
             if event.button == 1 and self.is_hovered: # 1 = Left-click
