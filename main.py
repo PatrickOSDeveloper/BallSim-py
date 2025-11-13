@@ -166,7 +166,7 @@ class BallSimApp:
                 end_pos = (x + GRID_DASH_LENGTH, y)
                 # Check that we do not draw past the screen width
                 if end_pos[0] > self.scene.width:
-                    end_pos = (x, self.scene.height)
+                    end_pos = (self.scene.width, y)
                 pg.draw.line(self.screen, GRID_COLOR, start_pos, end_pos, 1)
         
     def snap_to_grid(self, pos: tuple[int, int]) -> tuple[int, int]:
