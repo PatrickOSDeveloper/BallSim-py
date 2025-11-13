@@ -102,11 +102,12 @@ class Scene:
 
     def add_ball(self, ball: Ball):
         self.balls.append(ball)
+        self.balls = sorted(self.balls, key=lambda b: b.layer, reverse=True)
         
     def get_ball_at_pos(self, canvas_pos: pg.math.Vector2) -> Optional[Ball]:
         """Finds the topmost ball at a given canvas position."""
         # Check in reverse order (top layers first)
-        for ball in sorted(self.balls, key=lambda b: b.layer, reverse=True):
+        for ball in self.balls:
             if ball.contains_point(canvas_pos):
                 return ball
         return None
@@ -115,14 +116,12 @@ class Scene:
         """Update all objects in the scene."""
         for ball in self.balls:
             ball.update(dt)
-        
-        # TODO: Add your collision logic here if not using Pymunk
-        # self.handle_collisions()
 
-    def draw(self, screen: pg.Surface, camera_offset: pg.math.Vector2):
+    def draw(self, screen: pg.Surface):
         """Draw the entire scene."""
         # Draw background (we fill the whole canvas)
         screen.fill(self.render_bg_color)
+        
         
         # TODO: Draw a grid relative to the camera_offset
         
