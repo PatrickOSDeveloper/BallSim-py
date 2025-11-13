@@ -7,11 +7,16 @@ except ImportError as err:
     print(f"Failed to load module. {err}")
     sys.exit(2)
 
-DEFAULT_HEIGHT = 1280
-DEFAULT_WIDTH = 720
+DEFAULT_WIDTH = 1280
+DEFAULT_HEIGHT = 720
 DEFAULT_BG_COLOR = (34, 34, 34)
 DEFAULT_BALL_RADIUS = 24
 DEFAULT_BALL_COLOR = (255, 0, 0)
+
+GRID_SPACING = 50
+GRID_COLOR = (173, 216, 230)
+GRID_DASH_LENGTH = 5
+GRID_GAP_LENGTH = 5
 
 class BallPath:
     """Holds the animation path data for a Ball object."""
@@ -86,7 +91,7 @@ class BallSimApp:
 
         self.scene = Scene()
 
-        self.screen = pg.display.set_mode((self.scene.height, self.scene.width))
+        self.screen = pg.display.set_mode((self.scene.width, self.scene.height))
         pg.display.set_caption("BallSim — Scene Editor")
 
         self.clock = pg.time.Clock()
@@ -108,6 +113,16 @@ class BallSimApp:
         for event in pg.event.get():
             if event.type == QUIT:
                 self.running = False
+
+            if event.type == MOUSEBUTTONDOWN:
+                # 1 = Left-click
+                if event.button == 1:
+                    mouse_pos = pg.mouse.get_pos()
+                    snapped_pos = self.snap_to_grid(mouse_pos)
+
+                    new_ball = Ball(position=pg.math.Vector2(snapped_pos))
+
+                    self.scene.add_ball(new_ball)
         
         # TODO: Add support for other user events.
     
@@ -119,6 +134,7 @@ class BallSimApp:
         """Draw everything to the screen."""
         self.screen.fill(self.scene.get_render_bg_color())
 
+        self.draw_grid()
 
         sorted_balls = sorted(self.scene.balls, key=lambda b: b.layer)
 
@@ -131,7 +147,34 @@ class BallSimApp:
             )
         
         pg.display.flip()
+    
+    def draw_grid(self):
+        """Draws the grid over the canvas in the scene editor window."""
 
+        for x in range(0, self.scene.width, GRID_SPACING):
+            for y in range(0, self.scene.height, GRID_DASH_LENGTH + GRID_GAP_LENGTH):
+                start_pos = (x, y)
+                end_pos = (x, y + GRID_DASH_LENGTH)
+                # Check that we do not draw past the screen height
+                if end_pos[1] > self.scene.height:
+                    end_pos = (x, self.scene.height)
+                pg.draw.line(self.screen, GRID_COLOR, start_pos, end_pos, 1)
+
+        for y in range(0, self.scene.height, GRID_SPACING):
+            for x in range(0, self.scene.width, GRID_DASH_LENGTH + GRID_GAP_LENGTH):
+                start_pos = (x, y)
+                end_pos = (x + GRID_DASH_LENGTH, y)
+                # Check that we do not draw past the screen width
+                if end_pos[0] > self.scene.width:
+                    end_pos = (x, self.scene.height)
+                pg.draw.line(self.screen, GRID_COLOR, start_pos, end_pos, 1)
+        
+    def snap_to_grid(self, pos: tuple[int, int]) -> tuple[int, int]:
+        """Calculate the nearest grid intersection to a given position."""
+        x, y = pos
+        snapped_x = round(x / GRID_SPACING) * GRID_SPACING
+        snapped_y = round(y / GRID_SPACING) * GRID_SPACING
+        return (snapped_x, snapped_y)
 
 # --- Entry Point ---
 if __name__ == "__main__":
