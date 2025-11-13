@@ -6,13 +6,14 @@ try:
     from typing import Dict, Any, Optional, List
     from enum import Enum, auto
     
-    from ui_elements import Button
+    from ui_elements import Button, TextInput, ToggleButtonGroup, draw_label, LABEL_TEXT_COLOR
 except ImportError as err:
     print(f"Failed to load module. {err}")
     sys.exit(2)
 
 class AppState(Enum):
     STATE_SUPPORT_MENU = auto()
+    STATE_SCENE_ATTRIBUTES = auto()
     STATE_SCENE_EDITOR = auto()
     # TODO: Add further states
 
@@ -37,6 +38,13 @@ MENU_HEIGHT = 300
 MENU_BG_COLOR = (50, 50, 50)
 MENU_BUTTON_WIDTH = 200
 MENU_BUTTON_HEIGHT = 50
+# Scene Attribute Window GUI constants
+ATTR_MENU_WIDTH = 600
+ATTR_MENU_HEIGHT = 500
+ATTR_MENU_BG_COLOR = (50, 50, 50)
+ATTR_LABEL_WIDTH = 150
+ATTR_INPUT_WIDTH = 100
+ATTR_INPUT_HEIGHT = 32
 
 class BallPath:
     """Holds the animation path data for a Ball object."""
@@ -140,6 +148,12 @@ class BallSimApp:
         self.menu_buttons: List[Button] = []
         self.create_support_menu()
 
+        # Scene Attributes-specific state
+        self.attr_ui_elements = []
+        self.attr_inputs: Dict[str, TextInput] = {}
+        self.attr_toggles: Optional[ToggleButtonGroup] = None
+        self.attr_buttons: List[Button] = []
+
     def create_support_menu(self):
         """Creates and positions the buttons for the support menu."""
         self.menu_buttons = [] # Flush existing buttons
@@ -151,7 +165,7 @@ class BallSimApp:
             MENU_BUTTON_HEIGHT
         )
 
-        self.menu_buttons.append(Button("New Scene", new_scene_rect, self.go_to_scene_editor_stub))
+        self.menu_buttons.append(Button("New Scene", new_scene_rect, self.go_to_scene_attributes))
 
         load_scene_rect = pg.Rect(
             (MENU_WIDTH - MENU_BUTTON_WIDTH) // 2,
@@ -170,6 +184,161 @@ class BallSimApp:
         )
         # TODO: Implement help window
         self.menu_buttons.append(Button("Help", help_rect, self.show_help_stub))
+    
+    def go_to_scene_attributes(self):
+        """Switches to the Scene Attributes menu."""
+        self.app_state = AppState.STATE_SCENE_ATTRIBUTES
+        self.screen = pg.display.set_mode((ATTR_MENU_WIDTH, ATTR_MENU_HEIGHT))
+        pg.display.set_caption("BallSim — New Scene Attributes")
+        self.create_scene_attributes_menu()
+
+    def create_scene_attributes_menu(self):
+        """Builds all UI elements for the attributes menu."""
+        self.attr_ui_elements = []
+        self.attr_inputs = {}
+        self.attr_buttons = []
+
+        x_col1 = 50
+        x_col2 = x_col1 + ATTR_LABEL_WIDTH + 10
+
+        # 1. Canvas Size
+        y_pos = 75
+        self.attr_inputs['width'] = TextInput(pg.Rect(x_col2, y_pos, ATTR_INPUT_WIDTH, ATTR_INPUT_HEIGHT), "1280")
+        self.attr_inputs['height'] = TextInput(pg.Rect(x_col2 + ATTR_INPUT_WIDTH + 30, y_pos, ATTR_INPUT_WIDTH, ATTR_INPUT_HEIGHT), "720")
+        
+        # 2. Color Space
+        y_pos = 120
+        self.attr_toggles = ToggleButtonGroup(
+            active_option='oklab', 
+            on_toggle=self.on_color_space_toggle
+        )
+        self.attr_toggles.add_button("RGB", pg.Rect(x_col2, y_pos, 80, ATTR_INPUT_HEIGHT))
+        self.attr_toggles.add_button("HSLA", pg.Rect(x_col2 + 90, y_pos, 80, ATTR_INPUT_HEIGHT))
+        self.attr_toggles.add_button("oklab", pg.Rect(x_col2 + 180, y_pos, 80, ATTR_INPUT_HEIGHT))
+        
+        # 3. Background Color
+        y_pos = 200
+        # RGB
+        self.attr_inputs['rgb_r'] = TextInput(pg.Rect(x_col2, y_pos, 60, ATTR_INPUT_HEIGHT), "34")
+        self.attr_inputs['rgb_g'] = TextInput(pg.Rect(x_col2 + 70, y_pos, 60, ATTR_INPUT_HEIGHT), "34")
+        self.attr_inputs['rgb_b'] = TextInput(pg.Rect(x_col2 + 140, y_pos, 60, ATTR_INPUT_HEIGHT), "34")
+        
+        y_pos = 250
+        # HSLA
+        self.attr_inputs['hsla_h'] = TextInput(pg.Rect(x_col2, y_pos, 60, ATTR_INPUT_HEIGHT), "0")
+        self.attr_inputs['hsla_s'] = TextInput(pg.Rect(x_col2 + 70, y_pos, 60, ATTR_INPUT_HEIGHT), "0")
+        self.attr_inputs['hsla_l'] = TextInput(pg.Rect(x_col2 + 140, y_pos, 60, ATTR_INPUT_HEIGHT), "34")
+        
+        y_pos = 300
+        # oklab
+        self.attr_inputs['oklab_l'] = TextInput(pg.Rect(x_col2, y_pos, 60, ATTR_INPUT_HEIGHT), "34")
+        self.attr_inputs['oklab_a'] = TextInput(pg.Rect(x_col2 + 70, y_pos, 60, ATTR_INPUT_HEIGHT), "0")
+        self.attr_inputs['oklab_b'] = TextInput(pg.Rect(x_col2 + 140, y_pos, 60, ATTR_INPUT_HEIGHT), "0")
+        
+        # 4. Control Buttons
+        y_pos = ATTR_MENU_HEIGHT - 70
+        self.attr_buttons.append(Button("Back", pg.Rect(x_col1, y_pos, 120, 50), self.go_to_support_menu))
+        self.attr_buttons.append(Button("Create Scene", pg.Rect(ATTR_MENU_WIDTH - 170, y_pos, 150, 50), self.validate_and_create_scene))
+
+        # Store all elements for easy event handling
+        self.attr_ui_elements = [self.attr_toggles] + self.attr_buttons + list(self.attr_inputs.values())
+        
+        # Set initial enable state
+        self.on_color_space_toggle('oklab') # Default
+
+    def on_color_space_toggle(self, active_option: str):
+        """Callback to enable/disable color input fields."""
+        # RGB fields
+        rgb_enabled = (active_option == 'RGB')
+        self.attr_inputs['rgb_r'].set_enabled(rgb_enabled)
+        self.attr_inputs['rgb_g'].set_enabled(rgb_enabled)
+        self.attr_inputs['rgb_b'].set_enabled(rgb_enabled)
+        
+        # HSLA fields
+        hsla_enabled = (active_option == 'HSLA')
+        self.attr_inputs['hsla_h'].set_enabled(hsla_enabled)
+        self.attr_inputs['hsla_s'].set_enabled(hsla_enabled)
+        self.attr_inputs['hsla_l'].set_enabled(hsla_enabled)
+        
+        # oklab fields
+        oklab_enabled = (active_option == 'oklab')
+        self.attr_inputs['oklab_l'].set_enabled(oklab_enabled)
+        self.attr_inputs['oklab_a'].set_enabled(oklab_enabled)
+        self.attr_inputs['oklab_b'].set_enabled(oklab_enabled)
+
+    def validate_and_create_scene(self):
+        """Reads all inputs, validates them, and creates a new scene if valid."""
+        print("Validating scene attributes...")
+        is_valid = True
+        
+        # 1. Validate Width/Height
+        try:
+            width = int(self.attr_inputs['width'].text)
+            if not (100 <= width <= 3840): # Min/max screen size
+                raise ValueError("Width must be 100-3840")
+            self.attr_inputs['width'].error_message = None
+        except Exception as e:
+            self.attr_inputs['width'].error_message = "Invalid (100-3840)"
+            is_valid = False
+            
+        try:
+            height = int(self.attr_inputs['height'].text)
+            if not (100 <= height <= 2160):
+                raise ValueError("Height must be 100-2160")
+            self.attr_inputs['height'].error_message = None
+        except Exception as e:
+            self.attr_inputs['height'].error_message = "Invalid (100-2160)"
+            is_valid = False
+            
+        # 2. Get Color Space
+        color_space = self.attr_toggles.active_option
+        bg_color_dict = {}
+        
+        # 3. Validate Colors (basic int check for now)
+        # We will implement real validation later
+        try:
+            if color_space == 'RGB':
+                r = int(self.attr_inputs['rgb_r'].text)
+                g = int(self.attr_inputs['rgb_g'].text)
+                b = int(self.attr_inputs['rgb_b'].text)
+                # TODO: Add real 0-255 validation
+                bg_color_dict['rgb'] = (r, g, b)
+            elif color_space == 'HSLA':
+                h = int(self.attr_inputs['hsla_h'].text)
+                s = int(self.attr_inputs['hsla_s'].text)
+                l = int(self.attr_inputs['hsla_l'].text)
+                # TODO: Add real 0-360/0-100 validation
+                bg_color_dict['hsla'] = (h, s, l)
+            elif color_space == 'oklab':
+                l = int(self.attr_inputs['oklab_l'].text)
+                a = int(self.attr_inputs['oklab_a'].text)
+                b = int(self.attr_inputs['oklab_b'].text)
+                # TODO: Add real validation
+                bg_color_dict['oklab'] = (l, a, b)
+                # --- TEMP: Store an RGB equivalent for now ---
+                # This is a HACK until we build color conversion.
+                # We'll just use the oklab 'l' value for gray.
+                l_gray = max(0, min(255, int(l * 2.55))) # Rough guess
+                bg_color_dict['rgb'] = (l_gray, l_gray, l_gray)
+
+        except Exception as e:
+            print(f"Color validation error: {e}")
+            is_valid = False
+            # TODO: Add error messages to the specific failing fields
+            
+        if is_valid:
+            print("Validation successful! Creating new scene.")
+            # Create the new scene
+            new_scene = Scene(
+                width=width,
+                height=height,
+                bg_color=bg_color_dict,
+                color_space=color_space
+            )
+            # Switch to the editor
+            self.go_to_scene_editor(new_scene)
+        else:
+            print("Validation failed. Please fix errors.")
 
     def go_to_scene_editor(self, scene: Scene):
         """Switches the app to the Scene Editor Window."""
@@ -216,6 +385,7 @@ class BallSimApp:
 
     def handle_events(self):
         """Process user input based on the current app state."""
+
         for event in pg.event.get():
             if event.type == QUIT:
                 self.running = False
@@ -223,6 +393,8 @@ class BallSimApp:
 
             if self.app_state == AppState.STATE_SUPPORT_MENU:
                 self.handle_events_menu(event)
+            elif self.app_state == AppState.STATE_SCENE_ATTRIBUTES:
+                self.handle_events_attributes(event)
             elif self.app_state == AppState.STATE_SCENE_EDITOR:
                 self.handle_events_editor(event)
     
@@ -230,6 +402,8 @@ class BallSimApp:
         """Update game state based on the current app state."""
         if self.app_state == AppState.STATE_SUPPORT_MENU:
             self.update_menu()
+        elif self.app_state == AppState.STATE_SCENE_ATTRIBUTES:
+            self.update_attributes()
         elif self.app_state == AppState.STATE_SCENE_EDITOR:
             self.update_editor()
     
@@ -237,6 +411,8 @@ class BallSimApp:
         """Draw everything to the screen based on the current app state."""
         if self.app_state == AppState.STATE_SUPPORT_MENU:
             self.draw_menu()
+        elif self.app_state == AppState.STATE_SCENE_ATTRIBUTES:
+            self.draw_attributes()
         elif self.app_state == AppState.STATE_SCENE_EDITOR:
             self.draw_editor()
         
@@ -257,6 +433,38 @@ class BallSimApp:
         self.screen.fill(MENU_BG_COLOR)
         for button in self.menu_buttons:
             button.draw(self.screen)
+
+    def handle_events_attributes(self, event):
+        """Process input for the attributes menu."""
+        for element in self.attr_ui_elements:
+            element.handle_event(event)
+
+    def update_attributes(self):
+        """Update logic for the attributes menu (none for now)."""
+        pass
+
+    def draw_attributes(self):
+        """Draws the scene attributes menu."""
+        self.screen.fill(ATTR_MENU_BG_COLOR)
+        
+        x_col1 = 50
+        
+        # Draw labels
+        draw_label(self.screen, "Canvas Size:", (x_col1, 50))
+        draw_label(self.screen, "W:", (x_col1 + ATTR_LABEL_WIDTH + 5 - 25, 80))
+        draw_label(self.screen, "H:", (x_col1 + ATTR_LABEL_WIDTH + ATTR_INPUT_WIDTH + 40 - 25, 80))
+        
+        draw_label(self.screen, "Color Space:", (x_col1, 120))
+        
+        draw_label(self.screen, "Background Color:", (x_col1, 170))
+        
+        draw_label(self.screen, "RGB:", (x_col1, 200), font_size=24)
+        draw_label(self.screen, "HSLA:", (x_col1, 250), font_size=24)
+        draw_label(self.screen, "oklab:", (x_col1, 300), font_size=24)
+        
+        # Draw all UI elements
+        for element in self.attr_ui_elements:
+            element.draw(self.screen)
 
     def handle_events_editor(self, event):
         """Process user input at every time step."""
