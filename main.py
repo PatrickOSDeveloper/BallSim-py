@@ -61,7 +61,7 @@ class Scene:
         self.height = height
         self.bg_color = bg_color
         self.color_space = color_space
-        self.balls: List[Ball]
+        self.balls: List[Ball] = []
 
         # TODO: Add support for other color spaces.
     
@@ -86,8 +86,8 @@ class BallSimApp:
 
         self.scene = Scene()
 
-        self.screen = pg.display.set_mode((self.scene.width, self.scene.height))
-        pg.display.set_caption("BallSim Scene Editor")
+        self.screen = pg.display.set_mode((self.scene.height, self.scene.width))
+        pg.display.set_caption("BallSim — Scene Editor")
 
         self.clock = pg.time.Clock()
         self.running = True
@@ -118,6 +118,7 @@ class BallSimApp:
     def draw(self):
         """Draw everything to the screen."""
         self.screen.fill(self.scene.get_render_bg_color())
+
 
         sorted_balls = sorted(self.scene.balls, key=lambda b: b.layer)
 
