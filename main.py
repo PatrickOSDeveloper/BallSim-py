@@ -4,9 +4,17 @@ try:
     import math
     from pygame.locals import *
     from typing import Dict, Any, Optional, List
+    from enum import Enum, auto
+    
+    from ui_elements import Button
 except ImportError as err:
     print(f"Failed to load module. {err}")
     sys.exit(2)
+
+class AppState(Enum):
+    STATE_SUPPORT_MENU = auto()
+    STATE_SCENE_EDITOR = auto()
+    # TODO: Add further states
 
 DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
@@ -22,6 +30,12 @@ GRID_GAP_LENGTH = 5
 PATH_COLOR = (255, 255, 0)
 PATH_LINE_WIDTH = 2
 PATH_ARROW_SIZE = 10
+
+MENU_WIDTH = 400
+MENU_HEIGHT = 300
+MENU_BG_COLOR = (50, 50, 50)
+MENU_BUTTON_WIDTH = 200
+MENU_BUTTON_HEIGHT = 50
 
 class BallPath:
     """Holds the animation path data for a Ball object."""
@@ -108,19 +122,86 @@ class BallSimApp:
     def __init__(self):
         pg.init()
 
+        self.app_state = AppState.STATE_SUPPORT_MENU
         self.scene = Scene()
 
-        self.screen = pg.display.set_mode((self.scene.width, self.scene.height))
-        pg.display.set_caption("BallSim — Scene Editor")
+        self.screen = pg.display.set_mode((MENU_WIDTH, MENU_HEIGHT))
+        pg.display.set_caption("BallSim")
 
         self.clock = pg.time.Clock()
         self.running = True
 
-        # Are we currently *SHIFT + drag*'ing on a Ball
-        # to create a child BallPath?
+        # Scene Editor-specific state
         self.is_dragging_path = False
         self.drag_ball: Optional[Ball] = None
-    
+
+        # Menu-specific state
+        self.menu_buttons: List[Button] = []
+        self.create_support_menu()
+
+    def create_support_menu(self):
+        """Creates and positions the buttons for the support menu."""
+        self.menu_buttons = [] # Flush existing buttons
+
+        new_scene_rect = pg.Rect(
+            (MENU_WIDTH - MENU_BUTTON_WIDTH) // 2,
+            75,
+            MENU_BUTTON_WIDTH,
+            MENU_BUTTON_HEIGHT
+        )
+
+        self.menu_buttons.append(Button("New Scene", new_scene_rect, self.go_to_scene_editor_stub))
+
+        load_scene_rect = pg.Rect(
+            (MENU_WIDTH - MENU_BUTTON_WIDTH) // 2,
+            140,
+            MENU_BUTTON_WIDTH,
+            MENU_BUTTON_HEIGHT
+        )
+        # TODO: Implement file loading
+        self.menu_buttons.append(Button("Load Scene", load_scene_rect, self.load_scene_stub))
+
+        help_rect = pg.Rect(
+            (MENU_WIDTH - MENU_BUTTON_WIDTH) // 2,
+            205,
+            MENU_BUTTON_WIDTH,
+            MENU_BUTTON_HEIGHT
+        )
+        # TODO: Implement help window
+        self.menu_buttons.append(Button("Help", help_rect, self.show_help_stub))
+
+    def go_to_scene_editor(self, scene: Scene):
+        """Switches the app to the Scene Editor Window."""
+        self.scene = scene
+        self.app_state = AppState.STATE_SCENE_EDITOR
+        self.screen = pg.display.set_mode((self.scene.width, self.scene.height))
+        pg.display.set_caption("BallSim — Scene Editor")
+
+    def go_to_support_menu(self):
+        """Switches the app state to the Support Menu."""
+        self.app_state = AppState.STATE_SUPPORT_MENU
+        self.screen = pg.display.set_mode((MENU_WIDTH, MENU_HEIGHT))
+        pg.display.set_caption("BallSim")
+        self.create_support_menu()
+
+    def go_to_scene_editor_stub(self):
+        """Callback for 'New Scene' button."""
+        print("Clicked 'New Scene'. Opening Scene Editor with default scene.")
+        # TODO: Implement Scene Attributes intermediate window.
+        self.go_to_scene_editor(Scene())
+
+    def load_scene_stub(self):
+        """Callback for 'Load Scene' button."""
+        print("Clicked 'Load Scene'. This will open a file explorer.")
+        # TODO: Implement file dialog logic
+        pass
+
+    def show_help_stub(self):
+        """Callback for 'Help' button."""
+        print("Clicked 'Help'. This will open the help window.")
+        # TODO: Implement help window
+        pass
+
     def run(self):
         """Main application loop."""
         while self.running:
@@ -131,14 +212,6 @@ class BallSimApp:
 
         pg.quit()
         sys.exit()
-    
-    def get_ball_at_pos(self, pos: tuple[int, int]) -> Optional[Ball]:
-        """Finds the top-most ball at a given screen position."""
-        # Iterate in reverse to find the ball of the highest layer
-        for ball in reversed(self.scene.balls):
-            if ball.is_colliding_with_point(pos):
-                return ball
-        return None
 
     def handle_events(self):
         """Process user input at every time step."""
@@ -161,9 +234,6 @@ class BallSimApp:
                             self.drag_ball = clicked_ball
                         elif is_del:
                             self.scene.remove_ball(clicked_ball)
-                        else:
-                            # Clicked on a ball without a modifier key, do nothing
-                            pass
                     else:
                         # Clicked on empty space
                         if not is_shift and not is_del:
@@ -191,15 +261,20 @@ class BallSimApp:
                 # Reset dragging state
                         self.is_dragging_path = False
                         self.drag_ball = None
+            elif event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
+                    print("Escape pressed. Returning to support menu.")
+                    # TODO: Add AUTOSAVE logic here later
+                    self.got_to_support_menu()
 
         # TODO: Add support for other user events.
     
-    def update(self):
-        """Update game state (e.g., window animations). Not implemented yet."""
+    def update_editor(self):
+        """Update logic for the scene editor."""
         pass
 
-    def draw(self):
-        """Draw everything to the screen."""
+    def draw_editor(self):
+        """Draws the scene editor window."""
         self.screen.fill(self.scene.get_render_bg_color())
 
         self.draw_grid()
@@ -223,6 +298,14 @@ class BallSimApp:
         
         pg.display.flip()
     
+    def get_ball_at_pos(self, pos: tuple[int, int]) -> Optional[Ball]:
+        """Finds the top-most ball at a given screen position."""
+        # Iterate in reverse to find the ball of the highest layer
+        for ball in reversed(self.scene.balls):
+            if ball.is_colliding_with_point(pos):
+                return ball
+        return None
+
     def draw_ball_path(self, start_pos: pg.math.Vector2, end_pos: pg.math.Vector2, color: pg.Color):
         """Draws a vector onto the canvas, representing a BallPath."""
 
