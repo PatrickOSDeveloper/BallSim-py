@@ -148,7 +148,7 @@ class BallSimApp:
 
             elif event.type == MOUSEBUTTONDOWN:
                 if event.button == 1: # 1 = Left-click
-                    keys = pg.ley.get_pressed()
+                    keys = pg.key.get_pressed()
                     mouse_pos = event.pos
                     clicked_ball = self.get_ball_at_pos(mouse_pos)
 
@@ -173,7 +173,7 @@ class BallSimApp:
             
             # Handle mouse release to finish creation of a child BallPath
             elif event.type == MOUSEBUTTONUP:
-                if event.button == 1 # 1 = Left-click
+                if event.button == 1: # 1 = Left-click
                     if self.is_dragging_path and self.drag_ball:
                         end_pos_snapped = self.snap_to_grid(event.pos)
                         start_pos = self.drag_ball.position
@@ -189,8 +189,8 @@ class BallSimApp:
                             )
                             self.drag_ball.path = new_path
                 # Reset dragging state
-                            self.is_dragging_path = False
-                            self.drag_ball = None
+                        self.is_dragging_path = False
+                        self.drag_ball = None
 
         # TODO: Add support for other user events.
     
