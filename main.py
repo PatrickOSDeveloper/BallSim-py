@@ -72,4 +72,60 @@ class Ball:
 
     def update(self, dt: int):
         """Update ball's position based on its path."""
-        self.position += 
+        
+    def draw(self, screen: pg.Surface):
+        """Draw the ball onto the screen."""
+        draw_pos = (
+            int(self.position.x),
+            int(self.position.y)
+        )
+        pg.draw.circle(screen, self.render_color, draw_pos, self.radius)
+      
+    def contains_point(self, point: pg.math.Vector2):
+        return self.position.distance_to(point) <= self.radius
+
+
+
+class Scene:
+    """Manages all objects, properties, and serialization for a scene."""
+    def __init__(self, width: int, height: int, bg_color: Dict, 
+                 framerate: int, color_space: str):
+        self.width = width
+        self.height = height
+        self.bg_color_data = bg_color
+        self.framerate = framerate
+        self.color_space = color_space
+        self.balls: List[Ball] = []
+        
+        # TODO: This color should be calculated from bg_color_data
+        self.render_bg_color = (255, 255, 255)
+
+    def add_ball(self, ball: Ball):
+        self.balls.append(ball)
+        
+    def get_ball_at_pos(self, canvas_pos: pg.math.Vector2) -> Optional[Ball]:
+        """Finds the topmost ball at a given canvas position."""
+        # Check in reverse order (top layers first)
+        for ball in sorted(self.balls, key=lambda b: b.layer, reverse=True):
+            if ball.contains_point(canvas_pos):
+                return ball
+        return None
+
+    def update(self, dt: float):
+        """Update all objects in the scene."""
+        for ball in self.balls:
+            ball.update(dt)
+        
+        # TODO: Add your collision logic here if not using Pymunk
+        # self.handle_collisions()
+
+    def draw(self, screen: pg.Surface, camera_offset: pg.math.Vector2):
+        """Draw the entire scene."""
+        # Draw background (we fill the whole canvas)
+        screen.fill(self.render_bg_color)
+        
+        # TODO: Draw a grid relative to the camera_offset
+        
+        # Draw balls, sorted by layer
+        for ball in sorted(self.balls, key=lambda b: b.layer):
+            ball.draw(screen, camera_offset)
