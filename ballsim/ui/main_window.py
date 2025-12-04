@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import *
+from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import Slot
 
@@ -95,12 +95,3 @@ class MainWindow(QMainWindow):
         sender = self.sender()
         action_name = sender.text() if sender else "Unknown Action"
         print(f"Action triggered: {action_name}")
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-
-    main_window = MainWindow()
-    main_window.show()
-
-    sys.exit(app.exec())
